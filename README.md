@@ -1,7 +1,7 @@
 # FIDO2 Token Management Tool (C++ Version)
 
 > **Note**  
-> This tool is a complete rewrite of our PowerShell-based FIDO2 management tool, designed to address reliability and compatibility issues stemming from frequent antivirus false positives associated with PowerShell executables. While the new tool is harder to compile due to its C++ codebase, it offers significant improvements in performance, security, and user experience. Thank you for your understanding as we strive to deliver a more robust solution!
+> This tool is a complete rewrite of our PowerShell-based FIDO2 management tool, designed to address reliability and compatibility issues stemming from frequent antivirus false positives associated with PowerShell executables. While the new tool is harder to compile due to its C++ codebase, it offers significant improvements in performance, security, and user experience.  
 
 ## Overview
 
