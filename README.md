@@ -6,6 +6,7 @@
 ## Overview
 
 The FIDO2 Token Management Tool (`fido2-manage.exe`) is a lightweight, standalone application for managing FIDO2 authentication tokens. Built with C++, this tool leverages the power and efficiency of a compiled binary while maintaining the user-centric functionality of the original tool.
+
 ![image](https://github.com/user-attachments/assets/0150a1b6-3907-4d58-8e22-b07579db7b25)
 
 This new implementation directly integrates with the `libfido2` library, providing seamless access to advanced token management features without the need for external scripting environments.
