@@ -51,4 +51,4 @@ The decision to rewrite the tool in C++ was driven by the following challenges a
 
 ### Usage
 
-Run the executable from the command line with the desired arguments or launch FIDO2.1Manager.exe to launch the GUI
+Run the executable from the command line with the desired arguments or launch FIDO2.1Manager.exe to launch the GUI. Command line parameters are described on this page: https://www.token2.com/site/page/fido2-1-security-key-management-tool-gui-for-fido2-manage-exe
