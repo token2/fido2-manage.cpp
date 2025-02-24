@@ -22,6 +22,7 @@ HWND hComboBox, hListView, hRefreshButton, hMainWindow, hwnd;
 struct PasskeyInfo {
     std::wstring credentialId;
     std::wstring user;
+    std::wstring domain;
 };
 
 
@@ -134,11 +135,14 @@ std::vector<PasskeyInfo> GetResidentKeysWithDomains(const std::wstring& deviceNu
 
         // Debug: Check the raw output
         for (const auto& line : output) {
-        //    MessageBox(NULL, line.c_str(), L"Debug: Second Run Output", MB_OK);
+           //MessageBox(NULL, line.c_str(), L"Debug: Second Run Output", MB_OK);
         }
 
         // Parse the results and add them to the list
         std::vector<PasskeyInfo> parsedPasskeys = ParseResidentKeys(output);
+        for (auto& key : parsedPasskeys) {
+            key.domain = domain; // Assuming PasskeyInfo has a domain member.
+        }
         passkeys.insert(passkeys.end(), parsedPasskeys.begin(), parsedPasskeys.end());
     }
 
@@ -190,16 +194,22 @@ void PopulatePasskeysList(HWND hListView, const std::vector<PasskeyInfo>& passke
         lvItem.mask = LVIF_TEXT;
         lvItem.iItem = static_cast<int>(i);
 
-        // Add Credential ID
+        // Add Credential ID (Column 0)
         lvItem.pszText = const_cast<LPWSTR>(pk.credentialId.c_str());
         SendMessage(hListView, LVM_INSERTITEM, 0, (LPARAM)&lvItem);
 
-        // Add User
+        // Add User (Column 1)
         lvItem.iSubItem = 1;
         lvItem.pszText = const_cast<LPWSTR>(pk.user.c_str());
         SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
+
+        // Add Domain (Column 2)
+        lvItem.iSubItem = 2;
+        lvItem.pszText = const_cast<LPWSTR>(pk.domain.c_str());
+        SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
     }
 }
+
  
 
 INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -214,13 +224,17 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
         LVCOLUMN lvColumn = { 0 };
         lvColumn.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
-        lvColumn.cx = 150;
+        lvColumn.cx = 100;
         lvColumn.pszText = const_cast<LPWSTR>(L"Credential ID");
         SendMessage(hListView, LVM_INSERTCOLUMN, 0, (LPARAM)&lvColumn);
 
-        lvColumn.cx = 300;
+        lvColumn.cx = 200;
         lvColumn.pszText = const_cast<LPWSTR>(L"User");
         SendMessage(hListView, LVM_INSERTCOLUMN, 1, (LPARAM)&lvColumn);
+
+        lvColumn.cx = 200;  // Set the width for the Domain column
+        lvColumn.pszText = const_cast<LPWSTR>(L"Domain");
+        SendMessage(hListView, LVM_INSERTCOLUMN, 2, (LPARAM)&lvColumn);
 
         // Store the initial passkeys pointer
         passkeys = reinterpret_cast<std::vector<PasskeyInfo>*>(lParam);
@@ -277,6 +291,10 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
                 // Parse the second run output
                 std::vector<PasskeyInfo> parsedPasskeys = ParseResidentKeys(secondOutput);
+                for (auto& key : parsedPasskeys) {
+                    key.domain = domain; // Assuming PasskeyInfo has a domain member.
+                }
+
                 refreshedPasskeys.insert(refreshedPasskeys.end(), parsedPasskeys.begin(), parsedPasskeys.end());
             }
 
@@ -284,7 +302,7 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             for (const auto& pk : refreshedPasskeys) {
               //  MessageBox(hDlg, (L"Credential ID: " + pk.credentialId + L"\nUser: " + pk.user).c_str(), L"Debug: Parsed Passkey", MB_OK);
             }
-
+           
             // Step 3: Populate the ListView with the complete data
             PopulatePasskeysList(hListView, refreshedPasskeys);
 
@@ -418,7 +436,7 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
                 std::wstring fingerprintID_And_Description = line.substr(colonPos + 2); // From after ':'
 
                 // Debug: Display the parsed data
-                MessageBox(hDlg, (L"Index: " + index + L"\nData: " + fingerprintID_And_Description).c_str(), L"Debug: Parsed Data", MB_OK);
+              //  MessageBox(hDlg, (L"Index: " + index + L"\nData: " + fingerprintID_And_Description).c_str(), L"Debug: Parsed Data", MB_OK);
 
                 // Add to the ListView
                 LVITEM lvItem = { 0 };
@@ -440,7 +458,7 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
             }
             else {
                 // Debug: Show lines that failed to parse
-                MessageBox(hDlg, line.c_str(), L"Debug: Unparsed Line", MB_OK);
+              //  MessageBox(hDlg, line.c_str(), L"Debug: Unparsed Line", MB_OK);
             }
         }
 
