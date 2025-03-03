@@ -13,7 +13,7 @@
 #define ID_REFRESH_BUTTON 103
  
 // Global string variable
-std::wstring globalPin = L"111";
+std::wstring globalPin = L"0000";
 std::wstring deviceNumber = L"";
     
 HINSTANCE hInst;
@@ -24,6 +24,45 @@ struct PasskeyInfo {
     std::wstring user;
     std::wstring domain;
 };
+
+std::wstring EscapeCommandLineArgument(const std::wstring& input) {
+    std::wstring escaped = L"\""; // Start with a quote to properly handle spaces
+
+    for (wchar_t ch : input) {
+        switch (ch) {
+        case L'"': escaped += L"\\\""; break; // Escape double quotes
+        case L'^':
+        case L'&':
+        case L'|':
+        case L'<':
+        case L'>':
+        case L'%':
+        case L'!':
+        case L'(':
+        case L')':
+        case L'=':
+        case L';':
+        case L'`':
+        case L',':
+        case L'[':
+        case L']':
+        case L'{':
+        case L'}':
+        case L'*':
+        case L'?':
+        case L'\\': // Escape special characters for CMD
+            escaped += L'^';
+            escaped += ch;
+            break;
+        default:
+            escaped += ch;
+        }
+    }
+
+    escaped += L"\""; // End with a quote
+    return escaped;
+}
+
 
 
 // Function to execute a command and capture its output
@@ -659,6 +698,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     DisableAllButtons(hwnd);
     // Show the input box and store the result in globalPIN
     globalPin = ShowInputBox(NULL, L"Enter PIN", L"Please enter your PIN:");
+    globalPin = EscapeCommandLineArgument(globalPin);
 
     const size_t MIN_PIN_LENGTH = 4;
 
