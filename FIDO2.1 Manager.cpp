@@ -586,7 +586,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     
 
 
-    HWND hwnd = CreateWindowEx(
+    hwnd = CreateWindowEx(
         WS_EX_APPWINDOW,            // Extended window styles
         _T("DeviceInfoApp"),        // Window class name
         _T("FIDO2.1 Manager"),      // Window title
