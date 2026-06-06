@@ -565,7 +565,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 std::vector<std::wstring> RunCommandAndGetOutput(const std::wstring& command);
 void PopulateComboBox();
-void PopulateListView(const std::wstring& deviceNumber);
+void PopulateListView(HWND hwnd, const std::wstring& deviceNumber);
 void ResizeControls(HWND hwnd);
 void RefreshData();
 
