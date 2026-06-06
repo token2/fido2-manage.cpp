@@ -25,42 +25,32 @@ struct PasskeyInfo {
     std::wstring domain;
 };
 
-std::wstring EscapeCommandLineArgument(const std::wstring& input) {
-    std::wstring escaped = L"\""; // Start with a quote to properly handle spaces
+// Quotes one argument for a CreateProcess command string using the
+// Windows C-runtime parsing rules: wrap in double quotes, double any
+// backslashes that immediately precede a double quote or the closing
+// quote, and escape embedded double quotes with a backslash.
+// Do NOT use this for cmd.exe shell strings (ShellExecute paths).
+std::wstring QuoteArg(const std::wstring& arg) {
+    std::wstring result = L"\"";
+    int backslashes = 0;
 
-    for (wchar_t ch : input) {
-        switch (ch) {
-        case L'"': escaped += L"\\\""; break; // Escape double quotes
-        case L'^':
-        case L'&':
-        case L'|':
-        case L'<':
-        case L'>':
-        case L'%':
-        case L'!':
-        case L'(':
-        case L')':
-        case L'=':
-        case L';':
-        case L'`':
-        case L',':
-        case L'[':
-        case L']':
-        case L'{':
-        case L'}':
-        case L'*':
-        case L'?':
-        case L'\\': // Escape special characters for CMD
-            escaped += L'^';
-            escaped += ch;
-            break;
-        default:
-            escaped += ch;
+    for (wchar_t c : arg) {
+        if (c == L'\\') {
+            backslashes++;
+        } else if (c == L'"') {
+            result.append(backslashes * 2, L'\\');
+            result += L"\\\"";
+            backslashes = 0;
+        } else {
+            result.append(backslashes, L'\\');
+            result += c;
+            backslashes = 0;
         }
     }
 
-    escaped += L"\""; // End with a quote
-    return escaped;
+    result.append(backslashes * 2, L'\\');
+    result += L'"';
+    return result;
 }
 
 
@@ -137,7 +127,7 @@ std::vector<PasskeyInfo> ParseResidentKeys(const std::vector<std::wstring>& outp
 
 std::vector<std::wstring> GetDomains(const std::wstring& deviceNumber, const std::wstring& globalPin) {
     // Command for the first run
-    std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber + L" -pin " + globalPin;
+    std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
 
     // Debug: Show the command being executed
     //MessageBox(NULL, command.c_str(), L"Debug: Command Being Executed", MB_OK);
@@ -168,8 +158,8 @@ std::vector<PasskeyInfo> GetResidentKeysWithDomains(const std::wstring& deviceNu
 
     for (const auto& domain : domains) {
         // Command for the second run
-        std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber +
-            L" -domain " + domain + L" -pin " + globalPin;
+        std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) +
+            L" -domain " + QuoteArg(domain) + L" -pin " + globalPin;
         std::vector<std::wstring> output = RunCommandAndGetOutput(command);
 
         // Debug: Check the raw output
@@ -302,7 +292,7 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
           
 
             // Step 1: First Run - Fetch domains
-            std::wstring firstCommand = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber + L" -pin " + globalPin;
+            std::wstring firstCommand = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
             std::vector<std::wstring> firstOutput = RunCommandAndGetOutput(firstCommand);
 
             // Parse the output to get domains (users)
@@ -324,8 +314,8 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             // Step 2: Second Run - Fetch resident keys for each domain
             std::vector<PasskeyInfo> refreshedPasskeys;
             for (const auto& domain : domains) {
-                std::wstring secondCommand = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber +
-                    L" -domain " + domain + L" -pin " + globalPin;
+                std::wstring secondCommand = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) +
+                    L" -domain " + QuoteArg(domain) + L" -pin " + globalPin;
                 std::vector<std::wstring> secondOutput = RunCommandAndGetOutput(secondCommand);
 
                 // Parse the second run output
@@ -458,7 +448,7 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
         SendMessage(hListView, LVM_INSERTCOLUMN, 1, (LPARAM)&lvColumn);
 
         // Populate the ListView with fingerprints
-        std::wstring command = L".\\fido2-manage.exe -fingerprintlist -device " + deviceNumber + L" -pin " + globalPin;
+        std::wstring command = L".\\fido2-manage.exe -fingerprintlist -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
         std::vector<std::wstring> output = RunCommandAndGetOutput(command);
 
         for (const auto& line : output) {
@@ -698,7 +688,6 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     DisableAllButtons(hwnd);
     // Show the input box and store the result in globalPIN
     globalPin = ShowInputBox(NULL, L"Enter PIN", L"Please enter your PIN:");
-    globalPin = EscapeCommandLineArgument(globalPin);
 
     const size_t MIN_PIN_LENGTH = 4;
 
@@ -706,15 +695,15 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
         // Display an error message
         MessageBoxW(NULL, L"Error: PIN must be at least 4 characters long.", L"Invalid PIN", MB_OK | MB_ICONERROR);
 
-        // Terminate the application gracefully
         RefreshData();
         return;
-
     }
+
+    globalPin = QuoteArg(globalPin);
 
 
     // Construct the command
-    std::wstring command = L".\\fido2-manage.exe  -storage -device " + deviceNumber + L" -pin " + globalPin;  
+    std::wstring command = L".\\fido2-manage.exe -storage -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
 
     // Execute the command
     std::vector<std::wstring> output = RunCommandAndGetOutput(command);
@@ -741,7 +730,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
 
     }
     // Construct the second command
-    std::wstring command2 = L".\\fido2-manage.exe -info -device " + deviceNumber;
+    std::wstring command2 = L".\\fido2-manage.exe -info -device " + QuoteArg(deviceNumber);
 
     // Execute the second command
     std::vector<std::wstring> additionalOutput = RunCommandAndGetOutput(command2);
