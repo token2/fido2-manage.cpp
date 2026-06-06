@@ -83,12 +83,14 @@ std::vector<std::wstring> RunCommandAndGetOutput(const std::wstring& command) {
 
     PROCESS_INFORMATION pi = { 0 };
 
-    if (CreateProcess(
+    bool processCreated = CreateProcess(
         NULL,
         const_cast<LPWSTR>(command.c_str()),
-        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        CloseHandle(hPipeWrite);
+        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi) != 0;
 
+    CloseHandle(hPipeWrite);
+
+    if (processCreated) {
         char buffer[1024];
         DWORD bytesRead;
         while (ReadFile(hPipeRead, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
@@ -636,12 +638,14 @@ std::vector<std::wstring> RunCommandAndGetOutputWithTimeout(const std::wstring& 
 
     PROCESS_INFORMATION pi = { 0 };
 
-    if (CreateProcess(
+    bool processCreated = CreateProcess(
         NULL,
         const_cast<LPWSTR>(command.c_str()),
-        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        CloseHandle(hPipeWrite);
+        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi) != 0;
 
+    CloseHandle(hPipeWrite);
+
+    if (processCreated) {
         // Wait for the process to finish or timeout
         DWORD waitResult = WaitForSingleObject(pi.hProcess, timeoutMs);
         if (waitResult == WAIT_TIMEOUT) {
