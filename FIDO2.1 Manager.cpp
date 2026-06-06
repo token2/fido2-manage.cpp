@@ -13,7 +13,7 @@
 #define ID_REFRESH_BUTTON 103
  
 // Global string variable
-std::wstring globalPin = L"0000";
+std::wstring globalPin = L""; // empty until user confirms via dialog
 std::wstring deviceNumber = L"";
     
 HINSTANCE hInst;
@@ -395,24 +395,26 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
  
 
-std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstring& prompt) {
+std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstring& prompt, const std::wstring& defaultValue = L"") {
     static wchar_t buffer[256] = { 0 };
-   
-    // Show the input dialog
-    DialogBoxParam(
+    // Pre-populate with the default value so the user sees it in the edit control.
+    // On OK, GetDlgItemText overwrites buffer with whatever the user typed.
+    wcsncpy_s(buffer, 256, defaultValue.c_str(), _TRUNCATE);
+
+    INT_PTR result = DialogBoxParam(
         GetModuleHandle(NULL),
         MAKEINTRESOURCE(101), // ID of the dialog resource
         hWnd,
         [](HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) -> INT_PTR {
             switch (message) {
             case WM_INITDIALOG: {
-                // Set the prompt text
-                SetDlgItemText(hDlg, 1001, reinterpret_cast<LPCWSTR>(lParam));
+                SetDlgItemText(hDlg, 1001, reinterpret_cast<LPCWSTR>(lParam)); // prompt label
+                SetDlgItemText(hDlg, 1002, buffer);                            // pre-fill edit control
 
                 // Center the dialog on the screen
                 RECT rcDlg, rcScreen;
                 GetWindowRect(hDlg, &rcDlg);
-                SystemParametersInfo(SPI_GETWORKAREA, 0, &rcScreen, 0); // Get the working area of the screen
+                SystemParametersInfo(SPI_GETWORKAREA, 0, &rcScreen, 0);
                 int x = (rcScreen.right - rcScreen.left - (rcDlg.right - rcDlg.left)) / 2;
                 int y = (rcScreen.bottom - rcScreen.top - (rcDlg.bottom - rcDlg.top)) / 2;
                 SetWindowPos(hDlg, HWND_TOP, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
@@ -421,7 +423,7 @@ std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstri
 
             case WM_COMMAND:
                 if (LOWORD(wParam) == IDOK) {
-                    GetDlgItemText(hDlg, 1002, buffer, 256); // Get input from the edit box
+                    GetDlgItemText(hDlg, 1002, buffer, 256);
                     EndDialog(hDlg, IDOK);
                     return TRUE;
                 }
@@ -435,7 +437,10 @@ std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstri
         },
         reinterpret_cast<LPARAM>(prompt.c_str()));
 
-    return buffer; // Return the user input
+    if (result != IDOK)
+        return L"";
+
+    return buffer;
 }
 
 INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -697,7 +702,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
 
     DisableAllButtons(hwnd);
     // Show the input box and store the result in globalPIN
-    globalPin = ShowInputBox(NULL, L"Enter PIN", L"Please enter your PIN:");
+    globalPin = ShowInputBox(NULL, L"Enter PIN", L"Please enter your PIN:", L"0000");
     globalPin = EscapeCommandLineArgument(globalPin);
 
     const size_t MIN_PIN_LENGTH = 4;
