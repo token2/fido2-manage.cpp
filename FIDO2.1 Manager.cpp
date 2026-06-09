@@ -490,16 +490,12 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
                 lvItem.iItem = static_cast<int>(SendMessage(hListView, LVM_GETITEMCOUNT, 0, 0));
 
                 // Add Index to the first column
-                wchar_t indexBuffer[256];
-                wcscpy_s(indexBuffer, index.c_str());
-                lvItem.pszText = indexBuffer;
+                lvItem.pszText = const_cast<LPWSTR>(index.c_str());
                 SendMessage(hListView, LVM_INSERTITEM, 0, (LPARAM)&lvItem);
 
                 // Add Fingerprint ID and Description to the second column
                 lvItem.iSubItem = 1;
-                wchar_t dataBuffer[256];
-                wcscpy_s(dataBuffer, fingerprintID_And_Description.c_str());
-                lvItem.pszText = dataBuffer;
+                lvItem.pszText = const_cast<LPWSTR>(fingerprintID_And_Description.c_str());
                 SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
             }
             else {
@@ -873,16 +869,12 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
         lvItem.iItem = static_cast<int>(i);
 
         // Add Name
-        wchar_t nameBuffer[256];
-        wcscpy_s(nameBuffer, name.c_str());
-        lvItem.pszText = nameBuffer;
+        lvItem.pszText = const_cast<LPWSTR>(name.c_str());
         SendMessage(hListView, LVM_INSERTITEM, 0, (LPARAM)&lvItem);
 
         // Add Value
-        wchar_t valueBuffer[256];
-        wcscpy_s(valueBuffer, value.c_str());
         lvItem.iSubItem = 1;
-        lvItem.pszText = valueBuffer;
+        lvItem.pszText = const_cast<LPWSTR>(value.c_str());
         SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
     }
 
