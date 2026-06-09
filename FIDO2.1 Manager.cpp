@@ -132,15 +132,7 @@ std::vector<std::wstring> GetDomains(const std::wstring& deviceNumber, const std
     // Command for the first run
     std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
 
-    // Debug: Show the command being executed
-    //MessageBox(NULL, command.c_str(), L"Debug: Command Being Executed", MB_OK);
-
-    std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
-
-    // Debug: Check the raw output
-    for (const auto& line : output) {
-      //  MessageBox(NULL, line.c_str(), L"Debug: First Run Output", MB_OK);
-    }
+    std::vector<std::wstring> output = RunCommandAndGetOutput(command);
 
     // Extract domains (Users) from the output
     std::vector<std::wstring> domains;
@@ -164,11 +156,6 @@ std::vector<PasskeyInfo> GetResidentKeysWithDomains(const std::wstring& deviceNu
         std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + QuoteArg(deviceNumber) +
             L" -domain " + QuoteArg(domain) + L" -pin " + globalPin;
         std::vector<std::wstring> output = RunCommandAndGetOutput(command);
-
-        // Debug: Check the raw output
-        for (const auto& line : output) {
-           //MessageBox(NULL, line.c_str(), L"Debug: Second Run Output", MB_OK);
-        }
 
         // Parse the results and add them to the list
         std::vector<PasskeyInfo> parsedPasskeys = ParseResidentKeys(output);
@@ -309,11 +296,6 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
                 }
             }
 
-            // Debug: Display the parsed domains
-            for (const auto& domain : domains) {
-             //   MessageBox(hDlg, domain.c_str(), L"Debug: Parsed Domain", MB_OK);
-            }
-
             // Step 2: Second Run - Fetch resident keys for each domain
             std::vector<PasskeyInfo> refreshedPasskeys;
             for (const auto& domain : domains) {
@@ -330,11 +312,6 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
                 refreshedPasskeys.insert(refreshedPasskeys.end(), parsedPasskeys.begin(), parsedPasskeys.end());
             }
 
-            // Debug: Display parsed passkeys
-            for (const auto& pk : refreshedPasskeys) {
-              //  MessageBox(hDlg, (L"Credential ID: " + pk.credentialId + L"\nUser: " + pk.user).c_str(), L"Debug: Parsed Passkey", MB_OK);
-            }
-           
             // Step 3: Populate the ListView with the complete data
             PopulatePasskeysList(hListView, refreshedPasskeys);
 
@@ -348,8 +325,7 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             return TRUE;
         }
 
-        case IDC_BTN_SHOW_SELECTED: {
-            // Existing logic to handle the selected row
+        case IDC_BTN_DELETE_PASSKEY: {
             int selectedRow = ListView_GetNextItem(hListView, -1, LVNI_SELECTED);
             if (selectedRow == -1) {
                 MessageBox(hDlg, L"No row selected.", L"Error", MB_OK | MB_ICONERROR);
@@ -359,13 +335,21 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             wchar_t buffer[256] = { 0 };
             LVITEM lvItem = { 0 };
             lvItem.iItem = selectedRow;
-            lvItem.iSubItem = 0; // First column
+            lvItem.iSubItem = 0;
             lvItem.pszText = buffer;
             lvItem.cchTextMax = 256;
 
             if (SendMessage(hListView, LVM_GETITEMTEXT, selectedRow, (LPARAM)&lvItem) > 0) {
-                std::wstring command = L".\\fido2-manage.exe -delete -device " + deviceNumber + L" -credential " + buffer;
-                ShellExecute(NULL, L"open", L"cmd.exe", (L"/k " + command).c_str(), NULL, SW_SHOW);
+                std::wstring confirmMsg =
+                    L"Are you sure you want to delete this passkey?\n\n"
+                    L"Credential ID: " + std::wstring(buffer) +
+                    L"\n\nThis action cannot be undone.";
+                int confirm = MessageBox(hDlg, confirmMsg.c_str(), L"Confirm Delete",
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                if (confirm == IDYES) {
+                    std::wstring command = L".\\fido2-manage.exe -delete -device " + deviceNumber + L" -credential " + buffer;
+                    ShellExecute(NULL, L"open", L"cmd.exe", (L"/k " + command).c_str(), NULL, SW_SHOW);
+                }
             }
             else {
                 MessageBox(hDlg, L"Failed to retrieve row content.", L"Error", MB_OK | MB_ICONERROR);
@@ -471,9 +455,6 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
                 // Extract Fingerprint ID and Description (combined into second column)
                 std::wstring fingerprintID_And_Description = line.substr(colonPos + 2); // From after ':'
 
-                // Debug: Display the parsed data
-              //  MessageBox(hDlg, (L"Index: " + index + L"\nData: " + fingerprintID_And_Description).c_str(), L"Debug: Parsed Data", MB_OK);
-
                 // Add to the ListView
                 LVITEM lvItem = { 0 };
                 lvItem.mask = LVIF_TEXT;
@@ -487,10 +468,6 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
                 lvItem.iSubItem = 1;
                 lvItem.pszText = const_cast<LPWSTR>(fingerprintID_And_Description.c_str());
                 SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
-            }
-            else {
-                // Debug: Show lines that failed to parse
-              //  MessageBox(hDlg, line.c_str(), L"Debug: Unparsed Line", MB_OK);
             }
         }
 
@@ -552,15 +529,7 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
  
 
-// Function declarations
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-
-
-std::vector<std::wstring> RunCommandAndGetOutput(const std::wstring& command);
-void PopulateComboBox();
-void PopulateListView(HWND hwnd, const std::wstring& deviceNumber);
-void ResizeControls(HWND hwnd);
-void RefreshData();
 
 // Entry point
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow) {
@@ -608,8 +577,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
     return (int)msg.wParam;
 }
-
-#include <thread>
 
 // Function to execute a command with a timeout
 std::vector<std::wstring> RunCommandAndGetOutputWithTimeout(const std::wstring& command, DWORD timeoutMs) {
@@ -771,78 +738,41 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
             name = L"remaining passkeys";
         }
         if (name == L"existing passkeys") {
-           // MessageBox(hwnd, (L"Name: " + name + L", Value: " + value).c_str(), L"Debug: Existing Passkeys", MB_OK);
-
             try {
                 int count = std::stoi(value);
-
-             //   MessageBox(hwnd, (L"Count: " + std::to_wstring(count)).c_str(), L"Debug: Conversion Success", MB_OK);
-
                 if (count > 0) {
-                   // MessageBox(hwnd, L"Enabling Passkeys Button", L"Debug: Button Enabled", MB_OK);
-
                     HWND hButton = GetDlgItem(hwnd, ID_BTN_PASSKEYS);
                     if (hButton) {
-                        EnableWindow(hButton, TRUE); // Enable the button
-
-                        // Force a redraw to ensure the UI updates
+                        EnableWindow(hButton, TRUE);
                         RedrawWindow(hButton, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
-                    }
-                    else {
-                    //    MessageBox(hwnd, L"Button handle is null!", L"Debug: Button Error", MB_OK);
                     }
                 }
             }
             catch (...) {
-               // MessageBox(hwnd, L"Exception during conversion!", L"Debug: Conversion Failed", MB_OK);
             }
         }
 
         if (name == L"version strings") {
-            // Debug: Show the version strings value
-           // MessageBox(hwnd, (L"Version Strings: " + value).c_str(), L"Debug: Version Strings", MB_OK);
-
-            // Search for "FIDO_2_1"
             size_t posFIDO_2_1 = value.find(L"FIDO_2_1");
 
-            // Check if "FIDO_2_1" exists and is not followed by "_"
+            // FIDO_2_1 without a trailing underscore indicates FIDO 2.1 (not a pre-release variant)
             if (posFIDO_2_1 != std::wstring::npos &&
                 (posFIDO_2_1 + 8 >= value.length() || value[posFIDO_2_1 + 8] != L'_')) {
-               // MessageBox(hwnd, L"Enabling Enforce UV Button", L"Debug: Button Enabled", MB_OK);
-
                 HWND hButton = GetDlgItem(hwnd, ID_BTN_ENFORCEUV);
                 if (hButton) {
-                    EnableWindow(hButton, TRUE); // Enable the button
+                    EnableWindow(hButton, TRUE);
                     RedrawWindow(hButton, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
                 }
-                else {
-                 //   MessageBox(hwnd, L"Enforce UV Button handle is null!", L"Debug: Button Error", MB_OK);
-                }
-            }
-            else {
-               // MessageBox(hwnd, L"Conditions not met: Button will not be enabled", L"Debug: Button Not Enabled", MB_OK);
             }
         }
 
         if (name == L"options") {
-            // Debug: Show the options value
-           // MessageBox(hwnd, (L"Options: " + value).c_str(), L"Debug: Options", MB_OK);
-
-            // Check if "bioEnroll" exists in the options
             if (value.find(L"bioEnroll") != std::wstring::npos) {
-              //  MessageBox(hwnd, L"Enabling Fingerprints Button", L"Debug: Button Enabled", MB_OK);
-
                 HWND hButton = GetDlgItem(hwnd, ID_BTN_FINGERPRINT);
                 if (hButton) {
-                    EnableWindow(hButton, TRUE); // Enable the Fingerprints button
+                    EnableWindow(hButton, TRUE);
                     RedrawWindow(hButton, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
                 }
-                else {
-                 //   MessageBox(hwnd, L"Fingerprints Button handle is null!", L"Debug: Button Error", MB_OK);
-                }
-            }
-            else {
-              //  MessageBox(hwnd, L"bioEnroll not found in options", L"Debug: Button Not Enabled", MB_OK);
             }
         }
 
@@ -1034,18 +964,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             // Step 1: Get domains from the first run
             std::vector<std::wstring> domains = GetDomains(deviceNumber, globalPin);
 
-            // Debug: Check the extracted domains
-            for (const auto& domain : domains) {
-                //MessageBox(hwnd, domain.c_str(), L"Debug: Extracted Domain", MB_OK);
-            }
-
             // Step 2: Get resident keys with domains
             std::vector<PasskeyInfo> passkeys = GetResidentKeysWithDomains(deviceNumber, globalPin, domains);
-
-            // Debug: Check the parsed results from the second run
-            for (const auto& pk : passkeys) {
-              //  MessageBox(hwnd, (L"Credential ID: " + pk.credentialId + L"\nUser: " + pk.user).c_str(), L"Debug: Parsed Passkey", MB_OK);
-            }
 
             // Restore the default cursor
             HCURSOR hArrowCursor = LoadCursor(NULL, IDC_ARROW);
