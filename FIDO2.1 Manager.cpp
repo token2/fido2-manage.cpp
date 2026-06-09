@@ -11,7 +11,8 @@
 #define ID_COMBOBOX 101
 #define ID_LISTVIEW 102
 #define ID_REFRESH_BUTTON 103
- 
+#define DEVICE_TIMEOUT_MS 15000
+
 // Global string variable
 std::wstring globalPin = L"0000";
 std::wstring deviceNumber = L"";
@@ -73,12 +74,14 @@ std::vector<std::wstring> RunCommandAndGetOutput(const std::wstring& command) {
 
     PROCESS_INFORMATION pi = { 0 };
 
-    if (CreateProcess(
+    bool processCreated = CreateProcess(
         NULL,
         const_cast<LPWSTR>(command.c_str()),
-        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        CloseHandle(hPipeWrite);
+        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi) != 0;
 
+    CloseHandle(hPipeWrite);
+
+    if (processCreated) {
         char buffer[1024];
         DWORD bytesRead;
         while (ReadFile(hPipeRead, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
@@ -132,7 +135,7 @@ std::vector<std::wstring> GetDomains(const std::wstring& deviceNumber, const std
     // Debug: Show the command being executed
     //MessageBox(NULL, command.c_str(), L"Debug: Command Being Executed", MB_OK);
 
-    std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+    std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
     // Debug: Check the raw output
     for (const auto& line : output) {
@@ -387,9 +390,10 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstring& prompt) {
     static wchar_t buffer[256] = { 0 };
-   
+    buffer[0] = L'\0'; // clear any value left by a previous call
+
     // Show the input dialog
-    DialogBoxParam(
+    INT_PTR result = DialogBoxParam(
         GetModuleHandle(NULL),
         MAKEINTRESOURCE(101), // ID of the dialog resource
         hWnd,
@@ -425,7 +429,10 @@ std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstri
         },
         reinterpret_cast<LPARAM>(prompt.c_str()));
 
-    return buffer; // Return the user input
+    if (result != IDOK)
+        return L""; // cancelled or error — treat as no input
+
+    return buffer;
 }
 
 INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -473,16 +480,12 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
                 lvItem.iItem = static_cast<int>(SendMessage(hListView, LVM_GETITEMCOUNT, 0, 0));
 
                 // Add Index to the first column
-                wchar_t indexBuffer[256];
-                wcscpy_s(indexBuffer, index.c_str());
-                lvItem.pszText = indexBuffer;
+                lvItem.pszText = const_cast<LPWSTR>(index.c_str());
                 SendMessage(hListView, LVM_INSERTITEM, 0, (LPARAM)&lvItem);
 
                 // Add Fingerprint ID and Description to the second column
                 lvItem.iSubItem = 1;
-                wchar_t dataBuffer[256];
-                wcscpy_s(dataBuffer, fingerprintID_And_Description.c_str());
-                lvItem.pszText = dataBuffer;
+                lvItem.pszText = const_cast<LPWSTR>(fingerprintID_And_Description.c_str());
                 SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
             }
             else {
@@ -555,7 +558,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 std::vector<std::wstring> RunCommandAndGetOutput(const std::wstring& command);
 void PopulateComboBox();
-void PopulateListView(const std::wstring& deviceNumber);
+void PopulateListView(HWND hwnd, const std::wstring& deviceNumber);
 void ResizeControls(HWND hwnd);
 void RefreshData();
 
@@ -576,7 +579,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
     
 
 
-    HWND hwnd = CreateWindowEx(
+    hwnd = CreateWindowEx(
         WS_EX_APPWINDOW,            // Extended window styles
         _T("DeviceInfoApp"),        // Window class name
         _T("FIDO2.1 Manager"),      // Window title
@@ -626,12 +629,14 @@ std::vector<std::wstring> RunCommandAndGetOutputWithTimeout(const std::wstring& 
 
     PROCESS_INFORMATION pi = { 0 };
 
-    if (CreateProcess(
+    bool processCreated = CreateProcess(
         NULL,
         const_cast<LPWSTR>(command.c_str()),
-        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-        CloseHandle(hPipeWrite);
+        NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi) != 0;
 
+    CloseHandle(hPipeWrite);
+
+    if (processCreated) {
         // Wait for the process to finish or timeout
         DWORD waitResult = WaitForSingleObject(pi.hProcess, timeoutMs);
         if (waitResult == WAIT_TIMEOUT) {
@@ -673,7 +678,7 @@ std::vector<std::wstring> RunCommandAndGetOutputWithTimeout(const std::wstring& 
 
 // Populate the ComboBox with output from `fido2-manage.exe -list`
 void PopulateComboBox() {
-    std::vector<std::wstring> devices = RunCommandAndGetOutput(L".\\fido2-manage.exe -list");
+    std::vector<std::wstring> devices = RunCommandAndGetOutputWithTimeout(L".\\fido2-manage.exe -list", DEVICE_TIMEOUT_MS);
 
     for (const auto& device : devices) {
         SendMessage(hComboBox, CB_ADDSTRING, 0, (LPARAM)device.c_str());
@@ -706,7 +711,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     std::wstring command = L".\\fido2-manage.exe -storage -device " + QuoteArg(deviceNumber) + L" -pin " + globalPin;
 
     // Execute the command
-    std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+    std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
     // Check if the output contains "FIDO_ERR_PIN_REQUIRED"
     for (const auto& line : output) {
@@ -733,7 +738,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     std::wstring command2 = L".\\fido2-manage.exe -info -device " + QuoteArg(deviceNumber);
 
     // Execute the second command
-    std::vector<std::wstring> additionalOutput = RunCommandAndGetOutput(command2);
+    std::vector<std::wstring> additionalOutput = RunCommandAndGetOutputWithTimeout(command2, DEVICE_TIMEOUT_MS);
 
     // Append the second command's output to the existing output vector
     output.insert(output.end(), additionalOutput.begin(), additionalOutput.end());
@@ -848,16 +853,12 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
         lvItem.iItem = static_cast<int>(i);
 
         // Add Name
-        wchar_t nameBuffer[256];
-        wcscpy_s(nameBuffer, name.c_str());
-        lvItem.pszText = nameBuffer;
+        lvItem.pszText = const_cast<LPWSTR>(name.c_str());
         SendMessage(hListView, LVM_INSERTITEM, 0, (LPARAM)&lvItem);
 
         // Add Value
-        wchar_t valueBuffer[256];
-        wcscpy_s(valueBuffer, value.c_str());
         lvItem.iSubItem = 1;
-        lvItem.pszText = valueBuffer;
+        lvItem.pszText = const_cast<LPWSTR>(value.c_str());
         SendMessage(hListView, LVM_SETITEM, 0, (LPARAM)&lvItem);
     }
 
