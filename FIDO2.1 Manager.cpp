@@ -400,9 +400,10 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstring& prompt) {
     static wchar_t buffer[256] = { 0 };
-   
+    buffer[0] = L'\0'; // clear any value left by a previous call
+
     // Show the input dialog
-    DialogBoxParam(
+    INT_PTR result = DialogBoxParam(
         GetModuleHandle(NULL),
         MAKEINTRESOURCE(101), // ID of the dialog resource
         hWnd,
@@ -438,7 +439,10 @@ std::wstring ShowInputBox(HWND hWnd, const std::wstring& title, const std::wstri
         },
         reinterpret_cast<LPARAM>(prompt.c_str()));
 
-    return buffer; // Return the user input
+    if (result != IDOK)
+        return L""; // cancelled or error — treat as no input
+
+    return buffer;
 }
 
 INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -703,6 +707,13 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     DisableAllButtons(hwnd);
     // Show the input box and store the result in globalPIN
     globalPin = ShowInputBox(NULL, L"Enter PIN", L"Please enter your PIN:");
+
+    if (globalPin.empty()) {
+        // User cancelled the dialog — reset UI silently
+        RefreshData();
+        return;
+    }
+
     globalPin = EscapeCommandLineArgument(globalPin);
 
     const size_t MIN_PIN_LENGTH = 4;
@@ -711,10 +722,8 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
         // Display an error message
         MessageBoxW(NULL, L"Error: PIN must be at least 4 characters long.", L"Invalid PIN", MB_OK | MB_ICONERROR);
 
-        // Terminate the application gracefully
         RefreshData();
         return;
-
     }
 
 
