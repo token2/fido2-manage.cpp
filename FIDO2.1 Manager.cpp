@@ -11,7 +11,8 @@
 #define ID_COMBOBOX 101
 #define ID_LISTVIEW 102
 #define ID_REFRESH_BUTTON 103
- 
+#define DEVICE_TIMEOUT_MS 15000
+
 // Global string variable
 std::wstring globalPin = L"0000";
 std::wstring deviceNumber = L"";
@@ -142,7 +143,7 @@ std::vector<std::wstring> GetDomains(const std::wstring& deviceNumber, const std
     // Debug: Show the command being executed
     //MessageBox(NULL, command.c_str(), L"Debug: Command Being Executed", MB_OK);
 
-    std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+    std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
     // Debug: Check the raw output
     for (const auto& line : output) {
@@ -170,7 +171,7 @@ std::vector<PasskeyInfo> GetResidentKeysWithDomains(const std::wstring& deviceNu
         // Command for the second run
         std::wstring command = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber +
             L" -domain " + domain + L" -pin " + globalPin;
-        std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+        std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
         // Debug: Check the raw output
         for (const auto& line : output) {
@@ -303,7 +304,7 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
             // Step 1: First Run - Fetch domains
             std::wstring firstCommand = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber + L" -pin " + globalPin;
-            std::vector<std::wstring> firstOutput = RunCommandAndGetOutput(firstCommand);
+            std::vector<std::wstring> firstOutput = RunCommandAndGetOutputWithTimeout(firstCommand, DEVICE_TIMEOUT_MS);
 
             // Parse the output to get domains (users)
             std::vector<std::wstring> domains;
@@ -326,7 +327,7 @@ INT_PTR CALLBACK PasskeysDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             for (const auto& domain : domains) {
                 std::wstring secondCommand = L".\\fido2-manage.exe -residentkeys -device " + deviceNumber +
                     L" -domain " + domain + L" -pin " + globalPin;
-                std::vector<std::wstring> secondOutput = RunCommandAndGetOutput(secondCommand);
+                std::vector<std::wstring> secondOutput = RunCommandAndGetOutputWithTimeout(secondCommand, DEVICE_TIMEOUT_MS);
 
                 // Parse the second run output
                 std::vector<PasskeyInfo> parsedPasskeys = ParseResidentKeys(secondOutput);
@@ -459,7 +460,7 @@ INT_PTR CALLBACK FingerprintDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
         // Populate the ListView with fingerprints
         std::wstring command = L".\\fido2-manage.exe -fingerprintlist -device " + deviceNumber + L" -pin " + globalPin;
-        std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+        std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
         for (const auto& line : output) {
             // Split the line into parts
@@ -683,7 +684,7 @@ std::vector<std::wstring> RunCommandAndGetOutputWithTimeout(const std::wstring& 
 
 // Populate the ComboBox with output from `fido2-manage.exe -list`
 void PopulateComboBox() {
-    std::vector<std::wstring> devices = RunCommandAndGetOutput(L".\\fido2-manage.exe -list");
+    std::vector<std::wstring> devices = RunCommandAndGetOutputWithTimeout(L".\\fido2-manage.exe -list", DEVICE_TIMEOUT_MS);
 
     for (const auto& device : devices) {
         SendMessage(hComboBox, CB_ADDSTRING, 0, (LPARAM)device.c_str());
@@ -717,7 +718,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     std::wstring command = L".\\fido2-manage.exe  -storage -device " + deviceNumber + L" -pin " + globalPin;  
 
     // Execute the command
-    std::vector<std::wstring> output = RunCommandAndGetOutput(command);
+    std::vector<std::wstring> output = RunCommandAndGetOutputWithTimeout(command, DEVICE_TIMEOUT_MS);
 
     // Check if the output contains "FIDO_ERR_PIN_REQUIRED"
     for (const auto& line : output) {
@@ -744,7 +745,7 @@ void PopulateListView(HWND hwnd, const std::wstring& deviceNumber) {
     std::wstring command2 = L".\\fido2-manage.exe -info -device " + deviceNumber;
 
     // Execute the second command
-    std::vector<std::wstring> additionalOutput = RunCommandAndGetOutput(command2);
+    std::vector<std::wstring> additionalOutput = RunCommandAndGetOutputWithTimeout(command2, DEVICE_TIMEOUT_MS);
 
     // Append the second command's output to the existing output vector
     output.insert(output.end(), additionalOutput.begin(), additionalOutput.end());
